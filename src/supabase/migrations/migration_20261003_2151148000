@@ -1,0 +1,34 @@
+create or replace function public.validar_reserva()
+returns trigger language plpgsql as $$
+begin
+  if new.hora_fim <= new.hora_inicio then
+    raise exception 'A hora final deve ser posterior à hora inicial.';
+  end if;
+
+  if new.status = 'aprovada' then
+    if exists (
+      select 1 from public.reservas r
+      where r.sala_id = new.sala_id
+        and r.data = new.data
+        and r.status = 'aprovada'
+        and r.id <> coalesce(new.id, gen_random_uuid())
+        and new.hora_inicio < r.hora_fim
+        and r.hora_inicio < new.hora_fim
+    ) then
+      raise exception 'Já existe uma reserva aprovada para esta sala neste horário.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.validar_evento()
+returns trigger language plpgsql as $$
+begin
+  if new.horario_fim is not null and new.horario_fim <= new.horario_inicio then
+    raise exception 'O horário final deve ser posterior ao horário inicial.';
+  end if;
+  return new;
+end;
+$$;

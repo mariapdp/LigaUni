@@ -1,0 +1,299 @@
+-- Liga UNI MVP: entidades academicas, calendario de eventos e reservas de salas do Agora
+create extension if not exists "pgcrypto";
+
+-- ============ TABELAS ============
+create table if not exists public.entidades (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null unique,
+  descricao text,
+  cor text not null default '#fa5c04',
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.liga_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  nome text,
+  email text,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.user_roles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null check (role in ('lider','admin')),
+  criado_em timestamptz not null default now(),
+  unique (user_id, role)
+);
+
+create table if not exists public.lideres_entidades (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  entidade_id uuid not null references public.entidades(id) on delete cascade,
+  criado_em timestamptz not null default now(),
+  unique (user_id, entidade_id)
+);
+
+create table if not exists public.equipes (
+  id uuid primary key default gen_random_uuid(),
+  entidade_id uuid not null references public.entidades(id) on delete cascade,
+  nome text not null,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.membros (
+  id uuid primary key default gen_random_uuid(),
+  entidade_id uuid not null references public.entidades(id) on delete cascade,
+  equipe_id uuid references public.equipes(id) on delete set null,
+  nome text not null,
+  curso text,
+  universidade text,
+  funcao text,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.eventos (
+  id uuid primary key default gen_random_uuid(),
+  entidade_id uuid not null references public.entidades(id) on delete cascade,
+  nome text not null,
+  data date not null,
+  horario_inicio time not null,
+  horario_fim time,
+  local text,
+  descricao text,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.salas (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  capacidade integer not null default 0,
+  recursos text,
+  ativa boolean not null default true,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists public.reservas (
+  id uuid primary key default gen_random_uuid(),
+  sala_id uuid not null references public.salas(id) on delete cascade,
+  entidade_id uuid not null references public.entidades(id) on delete cascade,
+  solicitante_id uuid references auth.users(id) on delete set null,
+  finalidade text not null,
+  data date not null,
+  hora_inicio time not null,
+  hora_fim time not null,
+  status text not null default 'pendente' check (status in ('pendente','aprovada','recusada')),
+  justificativa_admin text,
+  criado_em timestamptz not null default now()
+);
+
+create index if not exists reservas_sala_data_idx on public.reservas (sala_id, data);
+create index if not exists membros_entidade_idx on public.membros (entidade_id);
+create index if not exists eventos_entidade_data_idx on public.eventos (entidade_id, data);
+
+-- ============ FUNCOES AUXILIARES (security definer evita recursao de RLS) ============
+create or replace function public.is_admin(p_user uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.user_roles where user_id = p_user and role = 'admin');
+$$;
+
+create or replace function public.is_lider_de(p_user uuid, p_entidade uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.lideres_entidades where user_id = p_user and entidade_id = p_entidade);
+$$;
+
+create or replace function public.pode_gerir_entidade(p_user uuid, p_entidade uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_admin(p_user) or public.is_lider_de(p_user, p_entidade);
+$$;
+
+-- ============ VALIDACOES ============
+create or replace function public.validar_reserva()
+returns trigger language plpgsql as $$
+begin
+  if new.hora_fim <= new.hora_inicio then
+    raise exception 'A hora final deve ser posterior a hora inicial.';
+  end if;
+
+  if new.status = 'aprovada' then
+    if exists (
+      select 1 from public.reservas r
+      where r.sala_id = new.sala_id
+        and r.data = new.data
+        and r.status = 'aprovada'
+        and r.id <> coalesce(new.id, gen_random_uuid())
+        and new.hora_inicio < r.hora_fim
+        and r.hora_inicio < new.hora_fim
+    ) then
+      raise exception 'Ja existe uma reserva aprovada para esta sala neste horario.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists reservas_validacao on public.reservas;
+create trigger reservas_validacao before insert or update on public.reservas
+for each row execute function public.validar_reserva();
+
+create or replace function public.validar_evento()
+returns trigger language plpgsql as $$
+begin
+  if new.horario_fim is not null and new.horario_fim <= new.horario_inicio then
+    raise exception 'O horario final deve ser posterior ao horario inicial.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists eventos_validacao on public.eventos;
+create trigger eventos_validacao before insert or update on public.eventos
+for each row execute function public.validar_evento();
+
+-- ============ NOVO USUARIO: perfil + papel lider + entidade escolhida ============
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_entidade uuid;
+  v_nome text;
+begin
+  v_nome := coalesce(nullif(new.raw_user_meta_data->>'nome', ''), split_part(new.email, '@', 1));
+
+  begin
+    v_entidade := nullif(new.raw_user_meta_data->>'entidade_id', '')::uuid;
+  exception when others then
+    v_entidade := null;
+  end;
+
+  if v_entidade is not null and not exists (select 1 from public.entidades where id = v_entidade) then
+    v_entidade := null;
+  end if;
+
+  insert into public.liga_profiles (id, nome, email)
+  values (new.id, v_nome, new.email)
+  on conflict (id) do nothing;
+
+  insert into public.user_roles (user_id, role)
+  values (new.id, 'lider')
+  on conflict (user_id, role) do nothing;
+
+  if v_entidade is not null then
+    insert into public.lideres_entidades (user_id, entidade_id)
+    values (new.id, v_entidade)
+    on conflict do nothing;
+  end if;
+
+  return new;
+exception when others then
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+for each row execute function public.handle_new_user();
+
+-- ============ RLS ============
+alter table public.entidades enable row level security;
+alter table public.liga_profiles enable row level security;
+alter table public.user_roles enable row level security;
+alter table public.lideres_entidades enable row level security;
+alter table public.equipes enable row level security;
+alter table public.membros enable row level security;
+alter table public.eventos enable row level security;
+alter table public.salas enable row level security;
+alter table public.reservas enable row level security;
+
+-- entidades: leitura publica (necessaria no cadastro), escrita admin, lider edita a propria
+drop policy if exists entidades_select on public.entidades;
+create policy entidades_select on public.entidades for select using (true);
+drop policy if exists entidades_insert on public.entidades;
+create policy entidades_insert on public.entidades for insert with check (public.is_admin(auth.uid()));
+drop policy if exists entidades_update on public.entidades;
+create policy entidades_update on public.entidades for update
+  using (public.pode_gerir_entidade(auth.uid(), id))
+  with check (public.pode_gerir_entidade(auth.uid(), id));
+drop policy if exists entidades_delete on public.entidades;
+create policy entidades_delete on public.entidades for delete using (public.is_admin(auth.uid()));
+
+-- profiles
+drop policy if exists liga_profiles_select on public.liga_profiles;
+create policy liga_profiles_select on public.liga_profiles for select
+  using (id = auth.uid() or public.is_admin(auth.uid()));
+drop policy if exists liga_profiles_update on public.liga_profiles;
+create policy liga_profiles_update on public.liga_profiles for update
+  using (id = auth.uid() or public.is_admin(auth.uid()))
+  with check (id = auth.uid() or public.is_admin(auth.uid()));
+
+-- papeis: leitura do proprio papel ou admin; escrita apenas admin (nunca decidida no cliente)
+drop policy if exists user_roles_select on public.user_roles;
+create policy user_roles_select on public.user_roles for select
+  using (user_id = auth.uid() or public.is_admin(auth.uid()));
+drop policy if exists user_roles_insert on public.user_roles;
+create policy user_roles_insert on public.user_roles for insert
+  with check (public.is_admin(auth.uid()));
+drop policy if exists user_roles_delete on public.user_roles;
+create policy user_roles_delete on public.user_roles for delete
+  using (public.is_admin(auth.uid()) and user_id <> auth.uid());
+
+-- vinculos lider <-> entidade
+drop policy if exists lideres_entidades_select on public.lideres_entidades;
+create policy lideres_entidades_select on public.lideres_entidades for select
+  using (user_id = auth.uid() or public.is_admin(auth.uid()));
+drop policy if exists lideres_entidades_insert on public.lideres_entidades;
+create policy lideres_entidades_insert on public.lideres_entidades for insert
+  with check (public.is_admin(auth.uid()));
+drop policy if exists lideres_entidades_delete on public.lideres_entidades;
+create policy lideres_entidades_delete on public.lideres_entidades for delete
+  using (public.is_admin(auth.uid()));
+
+-- dados por entidade: admin tudo, lider apenas a propria entidade
+drop policy if exists equipes_admin_lider on public.equipes;
+create policy equipes_admin_lider on public.equipes for all
+  using (public.pode_gerir_entidade(auth.uid(), entidade_id))
+  with check (public.pode_gerir_entidade(auth.uid(), entidade_id));
+
+drop policy if exists membros_admin_lider on public.membros;
+create policy membros_admin_lider on public.membros for all
+  using (public.pode_gerir_entidade(auth.uid(), entidade_id))
+  with check (public.pode_gerir_entidade(auth.uid(), entidade_id));
+
+drop policy if exists eventos_admin_lider on public.eventos;
+create policy eventos_admin_lider on public.eventos for all
+  using (public.pode_gerir_entidade(auth.uid(), entidade_id))
+  with check (public.pode_gerir_entidade(auth.uid(), entidade_id));
+
+-- salas: todos os autenticados leem, admin gerencia
+drop policy if exists salas_select on public.salas;
+create policy salas_select on public.salas for select using (auth.uid() is not null);
+drop policy if exists salas_admin on public.salas;
+create policy salas_admin on public.salas for all
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+
+-- reservas
+drop policy if exists reservas_select on public.reservas;
+create policy reservas_select on public.reservas for select
+  using (
+    public.is_admin(auth.uid())
+    or public.is_lider_de(auth.uid(), entidade_id)
+    or solicitante_id = auth.uid()
+  );
+drop policy if exists reservas_insert on public.reservas;
+create policy reservas_insert on public.reservas for insert
+  with check (
+    (public.is_admin(auth.uid()) or public.is_lider_de(auth.uid(), entidade_id))
+    and solicitante_id = auth.uid()
+    and status = 'pendente'
+  );
+drop policy if exists reservas_update_admin on public.reservas;
+create policy reservas_update_admin on public.reservas for update
+  using (public.is_admin(auth.uid()))
+  with check (public.is_admin(auth.uid()));
+drop policy if exists reservas_update_lider on public.reservas;
+create policy reservas_update_lider on public.reservas for update
+  using (solicitante_id = auth.uid() and status = 'pendente')
+  with check (solicitante_id = auth.uid() and status = 'pendente');
+drop policy if exists reservas_delete_lider on public.reservas;
+create policy reservas_delete_lider on public.reservas for delete
+  using (public.is_admin(auth.uid()) or (solicitante_id = auth.uid() and status = 'pendente'));
