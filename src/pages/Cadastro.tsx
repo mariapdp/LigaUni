@@ -12,6 +12,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -19,12 +20,15 @@ import { useAutenticacao } from "@/hooks/use-auth";
 import { useEntidades } from "@/hooks/use-dados";
 import { supabase } from "@/integrations/supabase/client";
 
+const NOVA = "__nova__";
+
 interface Erros {
   nome?: string;
   email?: string;
   senha?: string;
   confirmacao?: string;
   entidade?: string;
+  novaEntidade?: string;
 }
 
 export default function Cadastro() {
@@ -37,10 +41,14 @@ export default function Cadastro() {
   const [senha, setSenha] = useState("");
   const [confirmacao, setConfirmacao] = useState("");
   const [entidadeId, setEntidadeId] = useState("");
+  const [novaEntidade, setNovaEntidade] = useState("");
   const [erros, setErros] = useState<Erros>({});
   const [enviando, setEnviando] = useState(false);
 
   if (!carregando && usuario) return <RedirecionarPorPapel />;
+
+  const criandoEntidade = entidadeId === NOVA;
+  const semEntidades = (entidades ?? []).length === 0;
 
   const enviar = async (evento: FormEvent) => {
     evento.preventDefault();
@@ -51,6 +59,9 @@ export default function Cadastro() {
     if (senha.length < 6) novosErros.senha = "A senha precisa de pelo menos 6 caracteres.";
     if (senha !== confirmacao) novosErros.confirmacao = "As senhas não coincidem.";
     if (!entidadeId) novosErros.entidade = "Escolha a entidade que você representa.";
+    if (criandoEntidade && novaEntidade.trim().length < 2) {
+      novosErros.novaEntidade = "Informe o nome da entidade.";
+    }
     setErros(novosErros);
     if (Object.keys(novosErros).length > 0) return;
 
@@ -59,17 +70,21 @@ export default function Cadastro() {
       email: email.trim(),
       password: senha,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: { nome: nome.trim(), entidade_id: entidadeId },
+        // base + HashRouter: volta para a raiz do app, não para a raiz do domínio
+        emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+        data: criandoEntidade
+          ? { nome: nome.trim(), entidade_nome: novaEntidade.trim() }
+          : { nome: nome.trim(), entidade_id: entidadeId },
       },
     });
     setEnviando(false);
 
     if (error) {
+      console.error("Erro no cadastro:", error);
       toast.error(
         error.message.includes("already registered")
           ? "Este e-mail já possui cadastro. Tente entrar."
-          : "Não foi possível concluir o cadastro.",
+          : `Não foi possível concluir o cadastro: ${error.message}`,
       );
       return;
     }
@@ -121,7 +136,11 @@ export default function Cadastro() {
         <Campo
           rotulo="Sua entidade"
           erro={erros.entidade}
-          dica="Você poderá editar as informações dessa entidade no painel."
+          dica={
+            semEntidades
+              ? "Ainda não há entidades cadastradas. Escolha a última opção para criar a sua."
+              : "Você poderá editar as informações dessa entidade no painel."
+          }
           obrigatorio
         >
           <Select value={entidadeId} onValueChange={setEntidadeId}>
@@ -141,9 +160,28 @@ export default function Cadastro() {
                   </span>
                 </SelectItem>
               ))}
+              {!semEntidades && <SelectSeparator />}
+              <SelectItem value={NOVA}>Minha entidade não está na lista</SelectItem>
             </SelectContent>
           </Select>
         </Campo>
+
+        {criandoEntidade && (
+          <Campo
+            rotulo="Nome da entidade"
+            htmlFor="cad-nova-entidade"
+            erro={erros.novaEntidade}
+            dica="Ela será criada agora e a administração pode ajustar cor e descrição depois."
+            obrigatorio
+          >
+            <Input
+              id="cad-nova-entidade"
+              value={novaEntidade}
+              onChange={(e) => setNovaEntidade(e.target.value)}
+              placeholder="Ex.: Equipe de Robótica"
+            />
+          </Campo>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo rotulo="Senha" htmlFor="cad-senha" erro={erros.senha} obrigatorio>

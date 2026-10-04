@@ -1,0 +1,47 @@
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_entidade uuid;
+  v_nome text;
+  v_nova text;
+begin
+  v_nome := coalesce(nullif(new.raw_user_meta_data->>'nome', ''), split_part(new.email, '@', 1));
+
+  begin
+    v_entidade := nullif(new.raw_user_meta_data->>'entidade_id', '')::uuid;
+  exception when others then
+    v_entidade := null;
+  end;
+
+  if v_entidade is not null and not exists (select 1 from public.entidades where id = v_entidade) then
+    v_entidade := null;
+  end if;
+
+  -- entidade informada por nome: reaproveita se já existir, senão cria
+  v_nova := nullif(btrim(new.raw_user_meta_data->>'entidade_nome'), '');
+  if v_entidade is null and v_nova is not null then
+    select id into v_entidade from public.entidades where lower(nome) = lower(v_nova) limit 1;
+    if v_entidade is null then
+      insert into public.entidades (nome) values (v_nova) returning id into v_entidade;
+    end if;
+  end if;
+
+  insert into public.liga_profiles (id, nome, email)
+  values (new.id, v_nome, new.email)
+  on conflict (id) do nothing;
+
+  insert into public.user_roles (user_id, role)
+  values (new.id, 'lider')
+  on conflict (user_id, role) do nothing;
+
+  if v_entidade is not null then
+    insert into public.lideres_entidades (user_id, entidade_id)
+    values (new.id, v_entidade)
+    on conflict do nothing;
+  end if;
+
+  return new;
+exception when others then
+  return new;
+end;
+$$;

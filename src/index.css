@@ -1,120 +1,68 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/*
-  Liga UNI — design system
-  Tema unico: preto profundo + laranja da marca (#FA5C04).
-  Todos os estilos vivem aqui; os componentes consomem apenas tokens semanticos.
-*/
+/* Liga UNI — papel creme, tinta escura e o laranja da marca (#FA5C04), sem efeitos. */
 
 @layer base {
   :root {
-    --background: 240 6% 6%;
-    --foreground: 240 14% 96%;
+    --background: 40 33% 96%;
+    --foreground: 24 20% 10%;
 
-    --card: 240 5% 9%;
-    --card-foreground: 240 14% 96%;
+    --card: 40 45% 99%;
+    --card-foreground: 24 20% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 20% 10%;
 
-    --popover: 240 5% 11%;
-    --popover-foreground: 240 14% 96%;
+    --secondary: 38 25% 90%;
+    --secondary-foreground: 24 20% 14%;
+    --muted: 38 22% 92%;
+    --muted-foreground: 25 10% 38%;
+    --accent: 24 90% 92%;
+    --accent-foreground: 18 80% 28%;
 
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 240 14% 96%;
-
-    --muted: 240 4% 13%;
-    --muted-foreground: 240 6% 66%;
-
-    --accent: 21 40% 14%;
-    --accent-foreground: 26 96% 70%;
-
-    /* Marca */
     --primary: 21 97% 50%;
-    --primary-foreground: 20 16% 7%;
+    --primary-foreground: 24 30% 8%;
     --primary-soft: 21 97% 50%;
 
-    --destructive: 0 68% 48%;
-    --destructive-foreground: 0 0% 99%;
+    --destructive: 0 70% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 30%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 90% 34%;
+    --warning-foreground: 0 0% 100%;
 
-    --success: 152 62% 50%;
-    --success-foreground: 152 60% 8%;
-
-    --warning: 38 92% 60%;
-    --warning-foreground: 38 80% 9%;
-
-    --border: 240 5% 17%;
-    --input: 240 6% 42%;
+    --border: 36 18% 80%;
+    --input: 30 10% 62%;
     --ring: 21 97% 50%;
+    --radius: 0.5rem;
 
-    --radius: 0.75rem;
-
-    /* Sidebar */
-    --sidebar-background: 240 6% 7%;
-    --sidebar-foreground: 240 6% 66%;
+    --sidebar-background: 38 28% 93%;
+    --sidebar-foreground: 25 10% 35%;
     --sidebar-primary: 21 97% 50%;
-    --sidebar-primary-foreground: 20 16% 7%;
-    --sidebar-accent: 21 30% 13%;
-    --sidebar-accent-foreground: 26 96% 70%;
-    --sidebar-border: 240 5% 15%;
+    --sidebar-primary-foreground: 24 30% 8%;
+    --sidebar-accent: 24 90% 92%;
+    --sidebar-accent-foreground: 18 80% 28%;
+    --sidebar-border: 36 18% 82%;
     --sidebar-ring: 21 97% 50%;
 
-    /* Gradientes */
-    --gradient-brand: linear-gradient(135deg, hsl(24 97% 54%) 0%, hsl(14 94% 45%) 100%);
-    --gradient-brand-soft: linear-gradient(
-      135deg,
-      hsl(var(--primary) / 0.16) 0%,
-      hsl(var(--primary) / 0.02) 100%
-    );
-    --gradient-surface: linear-gradient(180deg, hsl(240 5% 11%) 0%, hsl(240 6% 7%) 100%);
-    --gradient-text: linear-gradient(120deg, hsl(36 96% 66%) 0%, hsl(var(--primary)) 45%, hsl(12 92% 48%) 100%);
-    --gradient-grid: radial-gradient(circle at 15% 10%, hsl(var(--primary) / 0.16), transparent 45%),
-      radial-gradient(circle at 85% 0%, hsl(24 96% 52% / 0.1), transparent 40%);
+    /* Mantemos os nomes, mas tudo é cor chapada */
+    --gradient-brand: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+    --gradient-brand-soft: linear-gradient(hsl(var(--accent)), hsl(var(--accent)));
+    --gradient-surface: linear-gradient(hsl(var(--card)), hsl(var(--card)));
+    --gradient-text: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+    --gradient-grid: none;
 
-    /* Sombras */
-    --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.45);
-    --shadow-sm: 0 2px 8px -2px hsl(0 0% 0% / 0.55);
-    --shadow-md: 0 10px 24px -8px hsl(0 0% 0% / 0.65), inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
-    --shadow-lg: 0 24px 48px -16px hsl(0 0% 0% / 0.7), inset 0 1px 0 0 hsl(0 0% 100% / 0.06);
-    --shadow-brand: 0 10px 26px -10px hsl(var(--primary) / 0.55);
-    --shadow-focus: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary) / 0.55);
+    --shadow-xs: 0 1px 0 hsl(24 20% 10% / 0.06);
+    --shadow-sm: 0 1px 2px hsl(24 20% 10% / 0.08);
+    --shadow-md: 0 4px 12px -4px hsl(24 20% 10% / 0.16);
+    --shadow-lg: 0 12px 28px -12px hsl(24 20% 10% / 0.28);
+    --shadow-brand: 0 2px 0 hsl(18 85% 30%);
+    --shadow-focus: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--primary) / 0.6);
 
-    --transition-smooth: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-
-  .dark {
-    --background: 240 6% 6%;
-    --foreground: 240 14% 96%;
-    --card: 240 5% 9%;
-    --card-foreground: 240 14% 96%;
-    --popover: 240 5% 11%;
-    --popover-foreground: 240 14% 96%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 240 14% 96%;
-    --muted: 240 4% 13%;
-    --muted-foreground: 240 6% 66%;
-    --accent: 21 40% 14%;
-    --accent-foreground: 26 96% 70%;
-    --primary: 21 97% 50%;
-    --primary-foreground: 20 16% 7%;
-    --destructive: 0 68% 48%;
-    --destructive-foreground: 0 0% 99%;
-    --success: 152 62% 50%;
-    --success-foreground: 152 60% 8%;
-    --warning: 38 92% 60%;
-    --warning-foreground: 38 80% 9%;
-    --border: 240 5% 17%;
-    --input: 240 6% 42%;
-    --ring: 21 97% 50%;
-    --sidebar-background: 240 6% 7%;
-    --sidebar-foreground: 240 6% 66%;
-    --sidebar-primary: 21 97% 50%;
-    --sidebar-primary-foreground: 20 16% 7%;
-    --sidebar-accent: 21 30% 13%;
-    --sidebar-accent-foreground: 26 96% 70%;
-    --sidebar-border: 240 5% 15%;
-    --sidebar-ring: 21 97% 50%;
+    --transition-smooth: all 0.18s ease-out;
   }
 }
 
@@ -123,10 +71,18 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* header fixo de 4rem não cobre o título da seção ao rolar */
+  [id] {
+    scroll-margin-top: 5rem;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: theme('fontFamily.sans');
-    font-feature-settings: 'cv11', 'ss01';
   }
 
   h1,
@@ -134,11 +90,11 @@
   h3,
   h4 {
     font-family: theme('fontFamily.display');
-    @apply tracking-tight;
+    letter-spacing: -0.02em;
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.35);
+    background: hsl(var(--primary) / 0.3);
   }
 
   :focus-visible {
@@ -148,20 +104,14 @@
 
 @layer utilities {
   .text-gradient-brand {
-    background: var(--gradient-text);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: hsl(var(--primary));
   }
-
   .surface-grid {
-    background-image: var(--gradient-grid);
+    background-image: none;
   }
-
   .tabular {
     font-variant-numeric: tabular-nums;
   }
-
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
@@ -169,83 +119,35 @@
 }
 
 @keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
-
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-
 @keyframes pulse-pending {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 hsl(var(--warning) / 0.5);
-  }
-  50% {
-    box-shadow: 0 0 0 6px hsl(var(--warning) / 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--warning) / 0.45); }
+  50% { box-shadow: 0 0 0 5px hsl(var(--warning) / 0); }
 }
 
-@keyframes float-slow {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(0, -14px, 0);
-  }
-}
+.animate-fade-in-up { animation: fade-in-up 240ms ease-out both; }
+.animate-fade-in { animation: fade-in 200ms ease-out both; }
+.animate-pulse-pending { animation: pulse-pending 2.2s ease-in-out infinite; }
 
-@keyframes marquee-dot {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 40px 0;
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.animate-fade-in {
-  animation: fade-in 260ms ease-out both;
-}
-
-.animate-pulse-pending {
-  animation: pulse-pending 2.2s ease-in-out infinite;
-}
-
-.animate-float-slow {
-  animation: float-slow 9s ease-in-out infinite;
-}
+/* os "blobs" desfocados de fundo foram removidos do visual */
+.animate-float-slow { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-html,
-body,
-#root {
+html, body, #root {
   width: 100%;
   min-height: 100%;
 }
