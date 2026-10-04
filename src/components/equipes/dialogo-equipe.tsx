@@ -1,117 +1,96 @@
-import { useMemo } from "react";
-import { CalendarOff, Plus } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
-import { PilulaEvento } from "@/components/calendario/pilula-evento";
+import { Campo } from "@/components/shared/campo";
 import { Button } from "@/components/ui/button";
-import type { EventoDetalhado } from "@/lib/domain";
-import { diasDaSemana, mesmoDia, paraISO, rotuloDiaCompleto } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import type { Equipe } from "@/lib/domain";
 
-interface PropsVisaoSemana {
-  diaBase: Date;
-  eventos: EventoDetalhado[];
-  mostrarEntidade?: boolean;
-  aoSelecionarDia: (dia: string) => void;
-  aoSelecionarEvento: (evento: EventoDetalhado) => void;
-  aoCriarNoDia?: (dia: string) => void;
+interface PropsDialogoEquipe {
+  aberto: boolean;
+  aoMudarAberto: (aberto: boolean) => void;
+  equipe?: Equipe | null;
+  aoSalvar: (nome: string, id?: string) => Promise<void>;
 }
 
-export function VisaoSemana({
-  diaBase,
-  eventos,
-  mostrarEntidade = false,
-  aoSelecionarDia,
-  aoSelecionarEvento,
-  aoCriarNoDia,
-}: PropsVisaoSemana) {
-  const dias = useMemo(() => diasDaSemana(diaBase), [diaBase]);
-  const hoje = useMemo(() => new Date(), []);
+export function DialogoEquipe({ aberto, aoMudarAberto, equipe, aoSalvar }: PropsDialogoEquipe) {
+  const [nome, setNome] = useState("");
+  const [erro, setErro] = useState<string | undefined>();
+  const [salvando, setSalvando] = useState(false);
+  const editando = Boolean(equipe);
 
-  const porDia = useMemo(() => {
-    const mapa = new Map<string, EventoDetalhado[]>();
-    for (const evento of eventos) {
-      const lista = mapa.get(evento.data) ?? [];
-      lista.push(evento);
-      mapa.set(evento.data, lista);
+  useEffect(() => {
+    if (!aberto) return;
+    setNome(equipe?.nome ?? "");
+    setErro(undefined);
+  }, [aberto, equipe]);
+
+  const enviar = async (evento: FormEvent) => {
+    evento.preventDefault();
+    if (!nome.trim()) {
+      setErro("Informe o nome da equipe.");
+      return;
     }
-    for (const lista of mapa.values()) {
-      lista.sort((a, b) => a.horario_inicio.localeCompare(b.horario_inicio));
+
+    setSalvando(true);
+    try {
+      await aoSalvar(nome.trim(), equipe?.id);
+      toast.success(editando ? "Equipe atualizada." : "Equipe criada.");
+      aoMudarAberto(false);
+    } catch (erroSalvar) {
+      toast.error(erroSalvar instanceof Error ? erroSalvar.message : "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
     }
-    return mapa;
-  }, [eventos]);
+  };
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7 lg:gap-2">
-      {dias.map((dia) => {
-        const iso = paraISO(dia);
-        const lista = porDia.get(iso) ?? [];
-        const ehHoje = mesmoDia(dia, hoje);
+    <Dialog open={aberto} onOpenChange={aoMudarAberto}>
+      <DialogContent className="border-border bg-popover shadow-lg sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg">
+            {editando ? "Editar equipe" : "Nova equipe"}
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-muted-foreground">
+            Equipes agrupam membros dentro da entidade (ex.: Diretoria, Powertrain, Extensão).
+          </DialogDescription>
+        </DialogHeader>
 
-        return (
-          <div
-            key={iso}
-            className={cn(
-              "flex min-h-[180px] flex-col gap-2 rounded-lg border bg-card p-3 shadow-sm lg:min-h-[320px]",
-              ehHoje ? "border-primary/40 bg-gradient-brand-soft" : "border-border",
-            )}
-          >
-            <button
+        <form className="flex flex-col gap-4" onSubmit={enviar}>
+          <Campo rotulo="Nome da equipe" htmlFor="equipe-nome" erro={erro} obrigatorio>
+            <Input
+              id="equipe-nome"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Ex.: Comissão de Eventos"
+            />
+          </Campo>
+
+          <DialogFooter className="gap-2">
+            <Button
               type="button"
-              onClick={() => aoSelecionarDia(iso)}
-              className="flex items-baseline justify-between gap-2 text-left"
+              variant="ghost"
+              onClick={() => aoMudarAberto(false)}
+              disabled={salvando}
             >
-              <span
-                className={cn(
-                  "font-display text-[13px] font-semibold capitalize",
-                  ehHoje ? "text-primary" : "text-foreground",
-                )}
-              >
-                {rotuloDiaCompleto(dia)}
-              </span>
-              {lista.length > 0 && (
-                <span className="text-[11px] tabular text-muted-foreground">{lista.length}</span>
-              )}
-            </button>
-
-            <div className="flex flex-1 flex-col gap-1.5">
-              {lista.length === 0 ? (
-                <p className="flex flex-1 items-center gap-2 rounded-md border border-dashed border-border px-2 py-3 text-[11px] text-muted-foreground">
-                  <CalendarOff className="size-3.5 shrink-0" />
-                  Sem eventos
-                </p>
-              ) : (
-                lista.map((evento) => (
-                  <div key={evento.id} className="flex flex-col gap-0.5">
-                    <PilulaEvento
-                      evento={evento}
-                      mostrarEntidade={mostrarEntidade}
-                      className="h-auto items-start py-1.5"
-                      onClick={() => aoSelecionarEvento(evento)}
-                    />
-                    {evento.local && (
-                      <span className="truncate pl-3 text-[10px] text-muted-foreground">
-                        {evento.local}
-                      </span>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {aoCriarNoDia && (
-              <Button
-                variant="ghost"
-                size="xs"
-                className="justify-start text-muted-foreground hover:text-primary"
-                onClick={() => aoCriarNoDia(iso)}
-              >
-                <Plus />
-                Evento
-              </Button>
-            )}
-          </div>
-        );
-      })}
-    </div>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={salvando}>
+              {salvando && <Loader2 className="size-4 animate-spin" />}
+              {editando ? "Salvar" : "Criar equipe"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
